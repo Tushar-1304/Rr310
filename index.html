@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>360° Bike Viewer</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            min-height: 100%;
+        }
+
+        body {
+            min-height: 100vh;
+            min-height: 100dvh;
+
+            display: flex;
+            justify-content: center;
+            align-items: center;
+
+            background: #f3f3f3;
+
+            font-family: Arial, sans-serif;
+
+            overflow: hidden;
+        }
+
+
+        /* ==========================================
+           360 VIEWER
+        ========================================== */
+
+        .viewer {
+
+            /*
+             * Width is responsive
+             */
+            width: min(100%, 1400px);
+
+            /*
+             * FIXED ASPECT RATIO
+             *
+             * This prevents the viewer height from
+             * changing when the image changes.
+             */
+            aspect-ratio: 4 / 3;
+
+            position: relative;
+
+            overflow: hidden;
+
+            display: flex;
+            justify-content: center;
+            align-items: center;
+
+            user-select: none;
+            -webkit-user-select: none;
+
+            cursor: grab;
+
+            /*
+             * Important for mobile dragging
+             */
+            touch-action: pan-y;
+        }
+
+
+        .viewer:active {
+            cursor: grabbing;
+        }
+
+
+        /* ==========================================
+           IMAGE
+        ========================================== */
+
+        .viewer img {
+
+            /*
+             * EVERY IMAGE HAS EXACTLY THE SAME
+             * RENDERED SIZE.
+             */
+            position: absolute;
+
+            top: 0;
+            left: 0;
+
+            width: 100%;
+            height: 100%;
+
+            /*
+             * contain keeps the complete motorcycle
+             * visible without distortion.
+             */
+            object-fit: contain;
+
+            object-position: center center;
+
+            display: block;
+
+            pointer-events: none;
+
+            -webkit-user-drag: none;
+        }
+
+
+        /* ==========================================
+           DIRECTION LABEL
+        ========================================== */
+
+        .direction {
+
+            position: absolute;
+
+            top: clamp(10px, 2vw, 25px);
+
+            left: 50%;
+
+            transform: translateX(-50%);
+
+            padding:
+                clamp(5px, 0.8vw, 8px)
+                clamp(10px, 1.5vw, 16px);
+
+            background: rgba(0, 0, 0, 0.6);
+
+            color: #fff;
+
+            border-radius: 30px;
+
+            font-size:
+                clamp(10px, 1.2vw, 14px);
+
+            pointer-events: none;
+
+            white-space: nowrap;
+
+            z-index: 5;
+        }
+
+
+        /* ==========================================
+           DRAG HINT
+        ========================================== */
+
+        .hint {
+
+            position: absolute;
+
+            bottom: clamp(10px, 2vw, 25px);
+
+            left: 50%;
+
+            transform: translateX(-50%);
+
+            padding:
+                clamp(7px, 1vw, 11px)
+                clamp(12px, 1.5vw, 20px);
+
+            background: rgba(0, 0, 0, 0.65);
+
+            color: #fff;
+
+            border-radius: 30px;
+
+            font-size:
+                clamp(11px, 1.2vw, 14px);
+
+            pointer-events: none;
+
+            white-space: nowrap;
+
+            z-index: 5;
+        }
+
+
+        /* ==========================================
+           MOBILE
+        ========================================== */
+
+        @media (max-width: 600px) {
+
+            .viewer {
+
+                width: 100%;
+
+                /*
+                 * Keep the SAME aspect ratio.
+                 * This is important for smooth
+                 * frame-to-frame switching.
+                 */
+                aspect-ratio: 4 / 3;
+            }
+
+            .hint {
+                bottom: 12px;
+            }
+
+            .direction {
+                top: 12px;
+            }
+        }
+
+
+        /* ==========================================
+           VERY SMALL PHONES
+        ========================================== */
+
+        @media (max-width: 380px) {
+
+            .hint {
+
+                font-size: 10px;
+
+                padding:
+                    6px 10px;
+            }
+
+            .direction {
+
+                font-size: 9px;
+
+                padding:
+                    5px 10px;
+            }
+        }
+
+
+        /* ==========================================
+           LANDSCAPE MOBILE
+        ========================================== */
+
+        @media (max-height: 500px) {
+
+            .viewer {
+
+                /*
+                 * Prevent viewer from becoming too
+                 * tall in landscape mode.
+                 */
+                height: 90dvh;
+                width: auto;
+
+                aspect-ratio: 4 / 3;
+
+                max-width: 100vw;
+            }
+        }
+
+    </style>
+</head>
+
+
+<body>
+
+
+    <div
+        class="viewer"
+        id="viewer"
+    >
+
+        <img
+            id="bikeImage"
+            src="./east.png"
+            alt="360 degree motorcycle viewer"
+            draggable="false"
+        >
+
+<!-- 
+        <div
+            class="direction"
+            id="direction"
+        >
+            EAST
+        </div> -->
+
+
+        <div class="hint">
+            ← Drag left / right →
+        </div>
+
+    </div>
+
+
+
+    <script>
+
+
+        // ==========================================
+        // IMAGE ORDER
+        //
+        // RIGHT → LEFT:
+        //
+        // EAST
+        // SOUTH-EAST
+        // SOUTH
+        // SOUTH-WEST
+        // WEST
+        // NORTH-WEST
+        // NORTH
+        // NORTH-EAST
+        //
+        // ==========================================
+
+        const images = [
+
+            {
+                name: "east",
+                src: "./east.png"
+            },
+
+            {
+                name: "south-east",
+                src: "./south-east.png"
+            },
+
+            {
+                name: "south",
+                src: "./south.png"
+            },
+
+            {
+                name: "south-west",
+                src: "./south-west.png"
+            },
+
+            {
+                name: "west",
+                src: "./west.png"
+            },
+
+            {
+                name: "north-west",
+                src: "./north-west.png"
+            },
+
+            {
+                name: "north",
+                src: "./north.png"
+            },
+
+            {
+                name: "north-east",
+                src: "./north-east.png"
+            }
+
+        ];
+
+
+        // ==========================================
+        // ELEMENTS
+        // ==========================================
+
+        const viewer =
+            document.getElementById("viewer");
+
+        const bikeImage =
+            document.getElementById("bikeImage");
+
+        // const direction =
+        //     document.getElementById("direction");
+
+
+        // ==========================================
+        // PRELOAD ALL IMAGES
+        // ==========================================
+
+        images.forEach(function(item) {
+
+            const img = new Image();
+
+            img.src = item.src;
+
+        });
+
+
+        // ==========================================
+        // CURRENT FRAME
+        // ==========================================
+
+        let currentIndex = 0;
+
+
+        // ==========================================
+        // CHANGE FRAME
+        // ==========================================
+
+        function showImage(index) {
+
+            /*
+             * Loop backwards
+             */
+            if (index < 0) {
+
+                index = images.length - 1;
+
+            }
+
+
+            /*
+             * Loop forwards
+             */
+            if (index >= images.length) {
+
+                index = 0;
+
+            }
+
+
+            currentIndex = index;
+
+
+            bikeImage.src =
+                images[currentIndex].src;
+
+
+            // direction.textContent =
+            //     images[currentIndex]
+            //         .name
+            //         .toUpperCase();
+
+        }
+
+
+        // ==========================================
+        // DRAG SETTINGS
+        // ==========================================
+
+        let isDragging = false;
+
+        let startX = 0;
+
+        /*
+         * Smaller value = more responsive rotation
+         */
+        const dragThreshold = 45;
+
+
+        // ==========================================
+        // MOUSE DOWN
+        // ==========================================
+
+        viewer.addEventListener(
+            "mousedown",
+            function(e) {
+
+                isDragging = true;
+
+                startX = e.clientX;
+
+            }
+        );
+
+
+        // ==========================================
+        // MOUSE MOVE
+        // ==========================================
+
+        document.addEventListener(
+            "mousemove",
+            function(e) {
+
+                if (!isDragging) {
+                    return;
+                }
+
+
+                const movement =
+                    e.clientX - startX;
+
+
+                /*
+                 * =================================
+                 * RIGHT → LEFT
+                 *
+                 * EAST
+                 * ↓
+                 * SOUTH-EAST
+                 * ↓
+                 * SOUTH
+                 * ↓
+                 * SOUTH-WEST
+                 * ...
+                 * =================================
+                 */
+
+                if (movement < -dragThreshold) {
+
+                    showImage(
+                        currentIndex + 1
+                    );
+
+                    startX = e.clientX;
+
+                }
+
+
+                /*
+                 * =================================
+                 * LEFT → RIGHT
+                 *
+                 * EAST
+                 * ↓
+                 * NORTH-EAST
+                 * ↓
+                 * NORTH
+                 * ↓
+                 * NORTH-WEST
+                 * ...
+                 * =================================
+                 */
+
+                if (movement > dragThreshold) {
+
+                    showImage(
+                        currentIndex - 1
+                    );
+
+                    startX = e.clientX;
+
+                }
+
+            }
+        );
+
+
+        // ==========================================
+        // MOUSE UP
+        // ==========================================
+
+        document.addEventListener(
+            "mouseup",
+            function() {
+
+                isDragging = false;
+
+            }
+        );
+
+
+        // ==========================================
+        // MOUSE LEAVE
+        // ==========================================
+
+        document.addEventListener(
+            "mouseleave",
+            function() {
+
+                isDragging = false;
+
+            }
+        );
+
+
+        // ==========================================
+        // TOUCH START
+        // ==========================================
+
+        viewer.addEventListener(
+            "touchstart",
+            function(e) {
+
+                startX =
+                    e.touches[0].clientX;
+
+            },
+            {
+                passive: true
+            }
+        );
+
+
+        // ==========================================
+        // TOUCH MOVE
+        // ==========================================
+
+        viewer.addEventListener(
+            "touchmove",
+            function(e) {
+
+                const currentX =
+                    e.touches[0].clientX;
+
+
+                const movement =
+                    currentX - startX;
+
+
+                /*
+                 * RIGHT → LEFT
+                 * NEXT FRAME
+                 */
+
+                if (movement < -dragThreshold) {
+
+                    showImage(
+                        currentIndex + 1
+                    );
+
+                    startX = currentX;
+
+                }
+
+
+                /*
+                 * LEFT → RIGHT
+                 * PREVIOUS FRAME
+                 */
+
+                if (movement > dragThreshold) {
+
+                    showImage(
+                        currentIndex - 1
+                    );
+
+                    startX = currentX;
+
+                }
+
+            },
+            {
+                passive: true
+            }
+        );
+
+
+        // ==========================================
+        // MOUSE WHEEL
+        // ==========================================
+
+        viewer.addEventListener(
+            "wheel",
+            function(e) {
+
+                e.preventDefault();
+
+
+                if (
+                    e.deltaX > 0 ||
+                    e.deltaY > 0
+                ) {
+
+                    showImage(
+                        currentIndex + 1
+                    );
+
+                }
+                else {
+
+                    showImage(
+                        currentIndex - 1
+                    );
+
+                }
+
+            },
+            {
+                passive: false
+            }
+        );
+
+
+        // ==========================================
+        // KEYBOARD
+        // ==========================================
+
+        document.addEventListener(
+            "keydown",
+            function(e) {
+
+                if (
+                    e.key === "ArrowRight"
+                ) {
+
+                    showImage(
+                        currentIndex + 1
+                    );
+
+                }
+
+
+                if (
+                    e.key === "ArrowLeft"
+                ) {
+
+                    showImage(
+                        currentIndex - 1
+                    );
+
+                }
+
+            }
+        );
+
+
+    </script>
+
+</body>
+</html>
